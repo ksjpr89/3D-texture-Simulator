@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Texture Simulator by KSJ (v10)</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --panel-bg: rgba(30, 30, 30, 0.85); 
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f5f5f7;
+            --text-muted: #a1a1a6;
+            --accent: #0a84ff; 
+            --accent-hover: #006ee6;
+            --control-bg: rgba(255, 255, 255, 0.08);
+            --control-hover: rgba(255, 255, 255, 0.12);
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 8px;
+            --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body { 
+            margin: 0; padding: 0; 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: var(--font-family); 
+            display: flex; height: 100vh; overflow: hidden; 
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        #sidebar { 
+            width: 420px; 
+            background-color: var(--panel-bg); 
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--panel-border); 
+            display: flex; flex-direction: column; 
+            padding: 24px; box-sizing: border-box; 
+            overflow-y: auto; z-index: 10; 
+            box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+        }
+
+        #viewer-container { flex: 1; position: relative; background: #8c8c8c; }
+        canvas { display: block; width: 100%; height: 100%; outline: none; }
+
+        .header-container {
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--panel-border);
+            text-align: center;
+        }
+        h1 { 
+            font-size: 1.4rem; 
+            font-weight: 600; 
+            margin: 0; 
+            letter-spacing: -0.02em;
+            color: #fff; 
+        }
+        .credit {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }
+
+        .control-group { 
+            margin-bottom: 24px; 
+            background: rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        label { 
+            display: block; 
+            margin-bottom: 10px; 
+            font-size: 0.85rem; 
+            font-weight: 600; 
+            color: var(--text-muted); 
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        select, input[type="file"], button { 
+            width: 100%; 
+            padding: 12px 14px; 
+            background-color: var(--control-bg); 
+            color: #fff; 
+            border: 1px solid transparent; 
+            border-radius: var(--radius-sm); 
+            box-sizing: border-box; 
+            font-size: 0.95rem; 
+            font-family: inherit;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+            appearance: none; 
+            cursor: pointer;
+        }
+        select:focus, button:focus { 
+            outline: none; 
+            border-color: var(--accent); 
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+        }
+        select:hover, input[type="file"]:hover { background-color: var(--control-hover); }
+        
+        select {
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a1a1a6%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px top 50%;
+            background-size: 10px auto;
+        }
+
+        button { 
+            background-color: var(--accent); 
+            color: #fff; 
+            font-weight: 600; 
+            border: none; 
+            border-radius: var(--radius-lg); 
+            padding: 14px;
+        }
+        button:hover { background-color: var(--accent-hover); transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+        button.secondary { background-color: rgba(255,255,255,0.1); color: #fff; }
+        button.secondary:hover { background-color: rgba(255,255,255,0.15); }
+        button.success { background-color: #30d158; } 
+        button.success:hover { background-color: #28b84d; }
+
+        .toggle-group { display: flex; align-items: center; margin-bottom: 0; margin-top: 8px;}
+        .toggle-group label { display: flex; align-items: center; font-weight: 500; font-size: 0.9rem; cursor: pointer; margin: 0; color: var(--text-main); text-transform: none; letter-spacing: normal;}
+        .toggle-group input[type="checkbox"] { 
+            appearance: none;
+            width: 40px; height: 24px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+            transition: background 0.3s ease;
+            margin-right: 10px;
+        }
+        .toggle-group input[type="checkbox"]::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 20px; height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .toggle-group input[type="checkbox"]:checked { background: var(--accent); }
+        .toggle-group input[type="checkbox"]:checked::after { transform: translateX(16px); }
+
+        .slider-container { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+        input[type="range"] { 
+            flex: 1; 
+            -webkit-appearance: none; 
+            background: transparent; 
+            height: 24px;
+            cursor: pointer;
+        }
+        input[type="range"]:focus { outline: none; }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 3px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            margin-top: -7px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        .slider-val { 
+            width: 60px; text-align: right; 
+            font-size: 0.9rem; font-weight: 600; 
+            color: var(--text-main); 
+            background: rgba(0,0,0,0.3);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        #insight-panel { 
+            background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.2) 100%);
+            border: 1px solid rgba(255,255,255,0.08); 
+            border-radius: var(--radius-lg); 
+            padding: 20px; 
+            margin-top: 10px; 
+            font-size: 0.9rem; 
+            line-height: 1.6; 
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        #insight-panel h3 { margin: 0 0 16px 0; font-size: 0.95rem; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.05em;}
+        #insight-panel h3::before { content: '✨'; font-size: 1.1rem; }
+        .insight-stat { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 8px 0; }
+        .insight-stat:last-of-type { border-bottom: none; }
+        .insight-stat span:first-child { color: var(--text-muted); }
+        .insight-stat span:last-child { font-weight: 600; color: #fff; }
+        .insight-desc { margin-top: 16px; color: #ddd; font-style: normal; font-size: 0.85rem; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.1);}
+
+        .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+        .btn-group button { flex: 1; margin: 0; }
+
+        #loading { 
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            color: #fff; display: none; align-items: center; justify-content: center; 
+            font-size: 1.1rem; font-weight: 500; z-index: 20; 
+            border-radius: 8px; 
+        }
+        
+        #img-preview { 
+            width: 100%; height: 140px; 
+            background-color: rgba(0,0,0,0.3); 
+            border: 1px dashed rgba(255,255,255,0.2); 
+            border-radius: var(--radius-md); 
+            margin-bottom: 16px; display: flex; align-items: center; justify-content: center; 
+            overflow: hidden; position: relative;
+            transition: border-color 0.2s;
+        }
+        #img-preview:hover { border-color: rgba(255,255,255,0.4); }
+        #img-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #img-preview span { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; display: flex; flex-direction: column; align-items: center; gap: 8px;}
+        #img-preview span::before { content: '📁'; font-size: 1.5rem; opacity: 0.7;}
+        
+        .file-upload-wrapper { position: relative; }
+        .file-upload-wrapper input[type="file"] {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
+        }
+        .file-upload-btn {
+            display: block; width: 100%; padding: 12px; background: var(--control-bg); border: 1px solid var(--panel-border);
+            border-radius: var(--radius-sm); text-align: center; color: var(--text-main); font-size: 0.9rem; font-weight: 500;
+            pointer-events: none; transition: background 0.2s;
+        }
+        .file-upload-wrapper:hover .file-upload-btn { background: var(--control-hover); }
+
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="header-container">
+            <h1>3D Texture Simulator</h1>
+            <div class="credit">by KSJ</div>
+        </div>
+
+        <div class="control-group">
+            <label>1. 패턴 이미지 업로드</label>
+            <div id="img-preview">
+                <span id="preview-text">기본 생성 패턴 사용 중</span>
+                <img id="preview-img" style="display:none;"/>
+            </div>
+            
+            <div class="file-upload-wrapper" style="margin-bottom:12px;">
+                <div class="file-upload-btn">이미지 파일 선택 (PNG/JPG)</div>
+                <input type="file" id="file-upload" accept="image/png, image/jpeg" />
+            </div>
+
+            <div class="toggle-group">
+                <input type="checkbox" id="toggle-invert">
+                <label for="toggle-invert">음각/양각 반전 (Invert)</label>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>2. 물리적 조건 설정</label>
+            <select id="sel-part">
+                <option value="exterior">외관 메인부 (Deep but Flat)</option>
+                <option value="functional">기능부/그립 (Shallow but Sharp)</option>
+            </select>
+            <select id="sel-material">
+                <option value="sand">기본 샌드 (Basic Sand)</option>
+                <option value="wood">우드 (Wood)</option>
+                <option value="stone">스톤 (Stone)</option>
+                <option value="fabric">패브릭 (Fabric)</option>
+                <option value="metal">메탈 및 기하학 (Metal & Geo)</option>
+            </select>
+            <select id="sel-grade">
+                <option value="fine">고운 감성 (Fine)</option>
+                <option value="medium" selected>중간 감성 (Medium)</option>
+                <option value="coarse">거친 감성 (Coarse)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>3. 실시간 시각화 조절</label>
+            <div style="margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888; margin-bottom:4px;">
+                    <span>깊이 (Depth)</span><span>단위: µm</span>
+                </div>
+                <div class="slider-container">
+                    <input type="range" id="slider-depth" min="0" max="1000" step="1" value="100">
+                    <div class="slider-val" id="val-depth">100</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888; margin-bottom:4px;">
+                    <span>반복 밀도 (Scale)</span><span>단위: 배율(x)</span>
+                </div>
+                <div class="slider-container">
+                    <input type="range" id="slider-repeat" min="0.5" max="30" step="0.5" value="1.0">
+                    <div class="slider-val" id="val-repeat">1.0</div>
+                </div>
+            </div>
+
+            <!-- 새로 추가된 패턴 맵 오퍼시티(진하기) 조절 슬라이더 -->
+            <div>
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888; margin-bottom:4px;">
+                    <span>패턴 음영 진하기 (Opacity)</span><span>단위: %</span>
+                </div>
+                <div class="slider-container">
+                    <input type="range" id="slider-opacity" min="0" max="100" step="1" value="30">
+                    <div class="slider-val" id="val-opacity">30%</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="insight-panel">
+            <h3>Haptic Insight</h3>
+            <div class="insight-stat"><span>추천 깊이</span> <span id="stat-depth">-</span></div>
+            <div class="insight-stat"><span>가이드 간격 (RSm)</span> <span id="stat-rsm">-</span></div>
+            <div class="insight-stat"><span>왜곡도 가이드</span> <span id="stat-rsk">-</span></div>
+            <div class="insight-stat"><span>필수 빼기 구배</span> <span id="stat-draft">-</span></div>
+            <div class="insight-desc" id="stat-desc">DB 매칭 대기 중...</div>
+        </div>
+
+        <div class="btn-group">
+            <button class="secondary" id="btn-reset">초기화</button>
+            <button id="btn-export-png">PNG 저장</button>
+            <button class="success" id="btn-export-stl">STL 내보내기</button>
+        </div>
+    </div>
+    
+    <div id="viewer-container">
+        <div id="loading">렌더링 업데이트 중...</div>
+    </div>
+
+<script>
+const CMF_DB = {
+    exterior: {
+        sand: {
+            fine: { depth_um: 15, rsm_mm: 0.1, rsk_guideline: "Rsk=0", draft_deg: 1.5, label: "실크 무광", insight: "부드러운 빛 반사와 고급스러운 실크 느낌을 줍니다." },
+            medium: { depth_um: 35, rsm_mm: 0.3, rsk_guideline: "Rsk < -1.5", draft_deg: 2.0, label: "프리미엄 매트", insight: "빛의 산란을 유도해 스크래치를 효과적으로 감춥니다." },
+            coarse: { depth_um: 60, rsm_mm: 0.5, rsk_guideline: "Rsk < -1.0", draft_deg: 4.0, label: "주물 느낌, 라운드 마감", insight: "무게감 있는 외관을 연출하며, 라운드 마감 처리되어 피부 접촉 시 불쾌감이 없습니다." }
+        },
+        wood: {
+            fine: { depth_um: 40, rsm_mm: 1.0, rsk_guideline: "Rsk ≪ 0", draft_deg: 3.0, label: "부드러운 베니어", insight: "잔잔한 우드결 방향성이 살아있으며 시각적 안정감을 줍니다." },
+            medium: { depth_um: 120, rsm_mm: 1.5, rsk_guideline: "Rsk < 0", draft_deg: 7.5, label: "자동차 인테리어 표준", insight: "고급차 내장재에 주로 쓰이는 깊이감입니다." },
+            coarse: { depth_um: 250, rsm_mm: 2.0, rku_guideline: "Rku < 2.5", rsk_guideline: "-", draft_deg: 12.0, label: "고목재, 긁힘 방지 라운딩", insight: "거친 원목의 야생적인 느낌을 주되, 둥글게 깎아 스크래치에 강합니다." }
+        },
+        stone: {
+            fine: { depth_um: 10, rsm_mm: "무작위 패턴", rsk_guideline: "Rsk ≪ 0", draft_deg: 1.5, label: "매끄러운 폴리싱 대리석", insight: "차갑고 매끄러운 감촉을 시각화합니다." },
+            medium: { depth_um: 80, rsm_mm: 1.5, rsk_guideline: "Rsk < 0", draft_deg: 4.5, label: "자연 풍화석", insight: "자연스럽게 마모된 스톤 표면." },
+            coarse: { depth_um: 250, rsm_mm: 3.0, rsk_guideline: "Rsk < -1.0", draft_deg: 12.0, label: "클레프트 슬레이트", insight: "깊은 크랙과 음각이 강조된 강인한 바디." }
+        },
+        fabric: {
+            fine: { depth_um: 30, rsm_mm: 0.15, rsk_guideline: "Rsk < 0", draft_deg: 2.0, label: "극세사 실크", insight: "손가락이 스칠 때 미세한 진동 피드백 유도." },
+            medium: { depth_um: 127, rsm_mm: 0.4, rsk_guideline: "Rsk < 0", draft_deg: 5.0, label: "가전 린넨 직조 표준", insight: "현대 홈가전에 널리 쓰이는 따뜻한 패브릭 룩." },
+            coarse: { depth_um: 180, rsm_mm: 0.8, rku_guideline: "Rku < 2.5", rsk_guideline: "-", draft_deg: 10.0, label: "굵은 캔버스", insight: "틈새가 너무 깊지 않게 조절된 아웃도어 캔버스." }
+        },
+        metal: {
+            fine: { depth_um: 10, rsm_mm: 0.01, rsk_guideline: "Rsk = 0", draft_deg: 1.0, label: "미러 폴리싱", insight: "극대화된 평탄도로 금속의 찬란한 광택." },
+            medium: { depth_um: 20, rsm_mm: 0.05, rsk_guideline: "Rsk < -1.0", draft_deg: 2.0, label: "예리한 헤어라인", insight: "빛의 맺힘을 길게 연장시켜 차가운 느낌 강조." },
+            coarse: { depth_um: 150, rsm_mm: 2.0, rsk_guideline: "Rsk < 0", draft_deg: 7.5, label: "3D 폴리곤", insight: "메카닉한 다각형 구조, 모서리 라운딩 마감." }
+        }
+    },
+    functional: {
+        sand: {
+            fine: { depth_um: 30, rsm_mm: 0.2, rsk_guideline: "Rsk > 1.0", draft_deg: 2.0, label: "마이크로 엣지 그립", insight: "얕지만 뾰족한 엣지들이 피부 미세 주름에 물려 강력한 논슬립." },
+            medium: { depth_um: 80, rsm_mm: 0.8, rsk_guideline: "Rsk > 0.5", draft_deg: 5.0, label: "스티플 그립", insight: "카메라 바디 등에 쓰이는 신뢰도 높은 마찰 표면." },
+            coarse: { depth_um: 150, rsm_mm: 1.2, rsk_guideline: "Rsk > 1.0", draft_deg: 7.5, label: "극한 그립", insight: "오염물이나 땀이 묻어도 마찰력을 유지하는 하드코어 그립." }
+        },
+        wood: {
+            fine: { depth_um: 80, rsm_mm: 0.5, rsk_guideline: "Rsk > 0.5", draft_deg: 5.0, label: "방향성 그립", insight: "슬라이드 조작부에 최적화된 결 방향성 마찰력." },
+            medium: { depth_um: 180, rsm_mm: 1.5, rsk_guideline: "Rsk > 0.5", draft_deg: 9.0, label: "입체 우드 그립", insight: "관절이 안착할 수 있는 굴곡." },
+            coarse: { depth_um: 280, rsm_mm: 2.5, rsk_guideline: "Rsk > 1.0", draft_deg: 13.0, label: "3D 락 핑거그립", insight: "손가락을 고정시키는 락킹 구조." }
+        },
+        stone: {
+            fine: { depth_um: 60, rsm_mm: 0.2, rsk_guideline: "Rsk > 1.0", draft_deg: 4.5, label: "마이크로 사암", insight: "고운 사포 같은 촉감으로 슬립 원천 차단." },
+            medium: { depth_um: 150, rsm_mm: "무작위 패턴", rsk_guideline: "Rsk > 0.5", draft_deg: 9.0, label: "현무암 펀칭 그립", insight: "기공들이 흡착력을 높여 젖은 손에도 훌륭함." },
+            coarse: { depth_um: 280, rsm_mm: "무작위 패턴", rsk_guideline: "Rsk > 1.5", draft_deg: 13.0, label: "화강암 그립", insight: "초거친 돌기 마감으로 아웃도어용 최적화." }
+        },
+        fabric: {
+            fine: { depth_um: 60, rsm_mm: 0.6, rsk_guideline: "Rsk > 0.5", draft_deg: 4.5, label: "스포츠 메쉬", insight: "통기성과 안정적인 마찰력 유지." },
+            medium: { depth_um: 120, rsm_mm: 1.0, rsk_guideline: "Rsk > 0.5", draft_deg: 7.5, label: "데님 십자 격자", insight: "상하좌우 균일한 저항력을 제공." },
+            coarse: { depth_um: 250, rsm_mm: 1.5, rsk_guideline: "Rsk > 1.0", draft_deg: 12.0, label: "위빙 스트랩 단차", insight: "기기와 손이 물리적으로 맞물리는 굵은 교차 단차." }
+        },
+        metal: {
+            fine: { depth_um: 80, rsm_mm: 0.5, rsk_guideline: "Rsk > 1.0", draft_deg: 5.0, label: "마이크로 엣지", insight: "정교한 회전 조작을 위한 미세 가공." },
+            medium: { depth_um: 120, rsm_mm: 1.0, rsk_guideline: "Rsk > 1.0", draft_deg: 7.5, label: "기어 패턴", insight: "확실한 체결감과 피드백을 전달하는 기하학적 요철." },
+            coarse: { depth_um: 250, rsm_mm: 1.5, rku_guideline: "Rku > 3.5", rsk_guideline: "-", draft_deg: 12.0, label: "다이아몬드 널링", insight: "절대 미끄러지지 않는 널링." }
+        }
+    }
+};
+
+let scene, camera, renderer, controls;
+let planeMesh, planeMaterial, topGeometry;
+let baseMesh;
+let currentTextureDisp = null;
+let currentTextureColor = null;
+let currentImageData = null;
+
+const PLANE_SIZE = 50; 
+const THICKNESS = 3;    
+
+const selPart = document.getElementById('sel-part');
+const selMaterial = document.getElementById('sel-material');
+const selGrade = document.getElementById('sel-grade');
+const fileUpload = document.getElementById('file-upload');
+const toggleInvert = document.getElementById('toggle-invert');
+const sliderDepth = document.getElementById('slider-depth');
+const sliderRepeat = document.getElementById('slider-repeat');
+const sliderOpacity = document.getElementById('slider-opacity');
+const valDepth = document.getElementById('val-depth');
+const valRepeat = document.getElementById('val-repeat');
+const valOpacity = document.getElementById('val-opacity');
+const loading = document.getElementById('loading');
+
+function init() {
+    initThree();
+    bindEvents();
+    generateDefaultTexture();
+    updateFromDB();
+}
+
+function initThree() {
+    const container = document.getElementById('viewer-container');
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xd0d0d0);
+
+    camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 1, 2000);
+    camera.position.set(0, 60, 80);
+
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+    } catch(e) {
+        container.innerHTML = "<div style='padding:20px; color:red;'>WebGL 오류</div>";
+        return;
+    }
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(40, 50, 30);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.left = -35;
+    dirLight.shadow.camera.right = 35;
+    dirLight.shadow.camera.top = 35;
+    dirLight.shadow.camera.bottom = -35;
+    scene.add(dirLight);
+    
+    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.4);
+    fillLight.position.set(-40, 30, -40);
+    scene.add(fillLight);
+
+    const baseGeo = new THREE.BoxGeometry(PLANE_SIZE, THICKNESS, PLANE_SIZE);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.7 });
+    baseMesh = new THREE.Mesh(baseGeo, baseMat);
+    baseMesh.position.y = -THICKNESS / 2;
+    baseMesh.receiveShadow = true;
+    baseMesh.castShadow = true;
+    scene.add(baseMesh);
+
+    topGeometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, 1024, 1024);
+    topGeometry.rotateX(-Math.PI / 2);
+    
+    planeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x999999, 
+        roughness: 0.7,
+        metalness: 0.1,
+        displacementScale: 0.1, 
+        bumpScale: 0.2, 
+        map: null 
+    });
+    
+    planeMesh = new THREE.Mesh(topGeometry, planeMaterial);
+    planeMesh.position.y = 0.01; 
+    planeMesh.receiveShadow = true;
+    planeMesh.castShadow = true;
+    scene.add(planeMesh);
+
+    window.addEventListener('resize', onWindowResize, false);
+    animate();
+}
+
+function onWindowResize() {
+    const container = document.getElementById('viewer-container');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+function bindEvents() {
+    selPart.addEventListener('change', updateFromDB);
+    selMaterial.addEventListener('change', updateFromDB);
+    selGrade.addEventListener('change', updateFromDB);
+    
+    sliderDepth.addEventListener('input', (e) => {
+        valDepth.innerText = e.target.value;
+        updateDisplacementScale();
+    });
+    
+    sliderRepeat.addEventListener('input', (e) => {
+        valRepeat.innerText = parseFloat(e.target.value).toFixed(1);
+        updateTextureRepeat();
+    });
+
+    sliderOpacity.addEventListener('input', (e) => {
+        valOpacity.innerText = e.target.value + '%';
+    });
+
+    // 오퍼시티는 마우스를 놓았을 때(change) 재렌더링 처리
+    sliderOpacity.addEventListener('change', () => {
+        applyTexture();
+    });
+
+    fileUpload.addEventListener('change', handleImageUpload);
+    toggleInvert.addEventListener('change', applyTexture);
+    
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        fileUpload.value = "";
+        generateDefaultTexture();
+        selPart.value = "exterior";
+        selMaterial.value = "sand";
+        selGrade.value = "medium";
+        toggleInvert.checked = false;
+        sliderOpacity.value = 30; // 기본 오퍼시티 복구
+        valOpacity.innerText = "30%";
+        updateFromDB();
+    });
+
+    document.getElementById('btn-export-png').addEventListener('click', exportPNG);
+    document.getElementById('btn-export-stl').addEventListener('click', exportSTL);
+}
+
+function updateFromDB() {
+    const dbData = CMF_DB[selPart.value][selMaterial.value][selGrade.value];
+    if(!dbData) return;
+
+    document.getElementById('stat-depth').innerText = dbData.depth_um + ' µm';
+    document.getElementById('stat-rsm').innerText = typeof dbData.rsm_mm === 'number' ? dbData.rsm_mm + ' mm' : dbData.rsm_mm;
+    
+    let rsk_str = dbData.rsk_guideline || "";
+    let rku_str = dbData.rku_guideline || "";
+    document.getElementById('stat-rsk').innerText = [rsk_str, rku_str].filter(x=>x && x!=="-").join(" / ");
+    document.getElementById('stat-draft').innerText = dbData.draft_deg + '°';
+    
+    document.getElementById('stat-desc').innerHTML = `<strong style="color:var(--accent); font-weight:600;">[${dbData.label}]</strong><br>${dbData.insight}`;
+
+    sliderDepth.value = dbData.depth_um;
+    valDepth.innerText = dbData.depth_um;
+    updateDisplacementScale();
+    
+    updateMaterialLook();
+}
+
+function updateMaterialLook() {
+    // 완전한 사출물 중간 회색 톤 유지 (0x999999)
+    let col = 0x999999, mtl = 0.1, rgh = 0.7;
+    
+    planeMaterial.color.setHex(col);
+    planeMaterial.metalness = mtl;
+    planeMaterial.roughness = rgh;
+    baseMesh.material.color.setHex(col); 
+}
+
+function updateDisplacementScale() {
+    if(!planeMaterial) return;
+    const depth_um = parseFloat(sliderDepth.value);
+    planeMaterial.displacementScale = depth_um / 1000.0;
+    planeMaterial.bumpScale = depth_um / 500.0; 
+}
+
+function updateTextureRepeat() {
+    if(!currentTextureDisp) return;
+    const scale = parseFloat(sliderRepeat.value);
+    
+    currentTextureDisp.repeat.set(scale, scale);
+    currentTextureDisp.needsUpdate = true;
+    
+    if(currentTextureColor) {
+        currentTextureColor.repeat.set(scale, scale);
+        currentTextureColor.needsUpdate = true;
+    }
+}
+
+function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+    loading.style.display = 'flex';
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() { processImage(img); };
+        img.src = event.target.result;
+        document.getElementById('preview-img').src = event.target.result;
+        document.getElementById('preview-img').style.display = 'block';
+        document.getElementById('preview-text').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+function generateDefaultTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(512, 512);
+    for(let i=0; i<imgData.data.length; i+=4) {
+        let val = Math.floor(Math.random() * 255);
+        imgData.data[i] = val; imgData.data[i+1] = val; imgData.data[i+2] = val; imgData.data[i+3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    ctx.globalAlpha = 0.5;
+    for(let i=0; i<5; i++) {
+        ctx.drawImage(canvas, 2, 0); ctx.drawImage(canvas, 0, 2);
+    }
+    const img = new Image();
+    img.onload = () => processImage(img);
+    img.src = canvas.toDataURL();
+    document.getElementById('preview-img').style.display = 'none';
+    document.getElementById('preview-text').style.display = 'block';
+    document.getElementById('preview-text').innerText = "기본 생성 패턴 사용 중";
+}
+
+function processImage(img) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let w = img.width, h = img.height;
+    if(w > 1024 || h > 1024) { let ratio = Math.min(1024/w, 1024/h); w = Math.floor(w*ratio); h = Math.floor(h*ratio); }
+    canvas.width = w; canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    currentImageData = { canvas, ctx, w, h };
+    applyTexture();
+}
+
+function applyTexture() {
+    if(!currentImageData) return;
+    loading.style.display = 'flex';
+    
+    setTimeout(() => {
+        const { ctx, w, h } = currentImageData;
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        const invert = toggleInvert.checked;
+        
+        // 패턴 맵 오퍼시티 값 (0.0 ~ 1.0)
+        const opacity = parseFloat(sliderOpacity.value) / 100.0;
+        
+        let min = 255, max = 0;
+        for(let i=0; i<data.length; i+=4) {
+            let gray = data[i]*0.3 + data[i+1]*0.59 + data[i+2]*0.11;
+            if(gray < min) min = gray; if(gray > max) max = gray;
+        }
+        const range = max - min === 0 ? 1 : max - min;
+        
+        // 두 개의 캔버스 생성: 하나는 물리적 깊이용(Disp), 하나는 옅은 컬러 맵용(Color)
+        const canvasDisp = document.createElement('canvas');
+        canvasDisp.width = w; canvasDisp.height = h;
+        const ctxDisp = canvasDisp.getContext('2d');
+        const imgDataDisp = ctxDisp.createImageData(w, h);
+        
+        const canvasColor = document.createElement('canvas');
+        canvasColor.width = w; canvasColor.height = h;
+        const ctxColor = canvasColor.getContext('2d');
+        const imgDataColor = ctxColor.createImageData(w, h);
+
+        const baseGray = 153; // 0x99에 해당하는 십진수 (사출 기본 회색)
+
+        for(let i=0; i<data.length; i+=4) {
+            let gray = data[i]*0.3 + data[i+1]*0.59 + data[i+2]*0.11;
+            let norm = ((gray - min) / range) * 255;
+            if(invert) norm = 255 - norm;
+            
+            // 1. 깊이/범프 맵용 (강한 대비 0~255)
+            imgDataDisp.data[i] = norm;
+            imgDataDisp.data[i+1] = norm;
+            imgDataDisp.data[i+2] = norm;
+            imgDataDisp.data[i+3] = 255;
+            
+            // 2. 컬러 맵용 (오퍼시티에 따라 베이스 그레이와 믹스하여 부드럽게)
+            let softColor = baseGray * (1 - opacity) + norm * opacity;
+            imgDataColor.data[i] = softColor;
+            imgDataColor.data[i+1] = softColor;
+            imgDataColor.data[i+2] = softColor;
+            imgDataColor.data[i+3] = 255;
+        }
+        
+        ctxDisp.putImageData(imgDataDisp, 0, 0);
+        ctxColor.putImageData(imgDataColor, 0, 0);
+        
+        const texLoader = new THREE.TextureLoader();
+        
+        // 깊이 텍스처 로드
+        texLoader.load(canvasDisp.toDataURL(), (texDisp) => {
+            texDisp.wrapS = THREE.RepeatWrapping; texDisp.wrapT = THREE.RepeatWrapping;
+            if(currentTextureDisp) currentTextureDisp.dispose();
+            currentTextureDisp = texDisp;
+            
+            // 컬러 텍스처 로드
+            texLoader.load(canvasColor.toDataURL(), (texColor) => {
+                texColor.wrapS = THREE.RepeatWrapping; texColor.wrapT = THREE.RepeatWrapping;
+                if(currentTextureColor) currentTextureColor.dispose();
+                currentTextureColor = texColor;
+                
+                planeMaterial.displacementMap = currentTextureDisp;
+                planeMaterial.bumpMap = currentTextureDisp; 
+                planeMaterial.map = currentTextureColor; // 부드러워진 음영 맵 적용!
+                planeMaterial.needsUpdate = true;
+                
+                updateTextureRepeat();
+                updateDisplacementScale();
+                loading.style.display = 'none';
+            });
+        });
+    }, 50);
+}
+
+function exportPNG() {
+    const link = document.createElement('a');
+    link.href = renderer.domElement.toDataURL('image/png');
+    link.download = 'CMF_Texture_v10.png';
+    link.click();
+}
+
+function exportSTL() {
+    alert("STL 기능은 복합 Mesh(블록+표면) 처리 관계로 이번 버전에서는 평면 메쉬만 추출합니다.");
+    const exporter = new THREE.STLExporter();
+    const result = exporter.parse(planeMesh);
+    const blob = new Blob([result], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'CMF_Texture_Top.stl';
+    link.click();
+}
+
+window.onload = init;
+</script>
+</body>
+</html>

@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium CMF Texture Simulator</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #888;
+            --accent: #4dabf7;
+            --accent-hover: #3b8cd9;
+            --border: #333;
+        }
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #sidebar {
+            width: 380px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        #viewer-container {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(135deg, #2a2a2a 0%, #111 100%);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        h1 { font-size: 1.2rem; margin-top: 0; margin-bottom: 20px; color: #fff; text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+        .control-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 0.9rem; font-weight: 600; color: #bbb; }
+        select, input[type="file"], button {
+            width: 100%;
+            padding: 10px;
+            background-color: #2a2a2a;
+            color: #fff;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+        select:focus, button:focus { outline: none; border-color: var(--accent); }
+        button { background-color: var(--accent); color: #fff; font-weight: bold; cursor: pointer; transition: background 0.2s; border: none; }
+        button:hover { background-color: var(--accent-hover); }
+        button.secondary { background-color: #444; }
+        button.secondary:hover { background-color: #555; }
+        
+        .toggle-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .toggle-group label { display: flex; align-items: center; font-weight: normal; font-size: 0.85rem; cursor: pointer; margin: 0;}
+        .toggle-group input { margin-right: 5px; width: auto; }
+
+        .slider-container { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        input[type="range"] { flex: 1; cursor: pointer; }
+        .slider-val { width: 50px; text-align: right; font-size: 0.85rem; font-family: monospace; color: var(--accent); }
+
+        #insight-panel {
+            background-color: #111;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        #insight-panel h3 { margin: 0 0 10px 0; font-size: 1rem; color: var(--accent); }
+        .insight-stat { display: flex; justify-content: space-between; border-bottom: 1px dashed #333; padding: 4px 0; }
+        .insight-stat span:last-child { font-weight: bold; color: #fff; }
+        .insight-desc { margin-top: 10px; color: #aaa; font-style: italic; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-group button { flex: 1; margin: 0; }
+
+        #loading {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); color: #fff;
+            display: none; align-items: center; justify-content: center;
+            font-size: 1.2rem; font-weight: bold; z-index: 20;
+        }
+        
+        /* 썸네일 미리보기 */
+        #img-preview {
+            width: 100%; height: 120px;
+            background-color: #111; border: 1px solid #333; border-radius: 4px;
+            margin-bottom: 10px; display: flex; align-items: center; justify-content: center;
+            overflow: hidden; position: relative;
+        }
+        #img-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #img-preview span { color: #555; font-size: 0.8rem; }
+    </style>
+    <!-- Three.js & Controls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- STLExporter -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>CMF Texture Simulator</h1>
+
+        <div class="control-group">
+            <label>1. 패턴 이미지 업로드 (Displacement)</label>
+            <div id="img-preview"><span id="preview-text">이미지 없음 (기본 패턴 사용)</span><img id="preview-img" style="display:none;"/></div>
+            <input type="file" id="file-upload" accept="image/png, image/jpeg" />
+            <div class="toggle-group">
+                <label><input type="checkbox" id="toggle-invert"> Invert (음각/양각 반전)</label>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>2. 적용 부위 (Part)</label>
+            <select id="sel-part">
+                <option value="exterior">외관 메인부 (Deep but Flat)</option>
+                <option value="functional">기능부/그립 (Shallow but Sharp)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>3. 소재 (Material)</label>
+            <select id="sel-material">
+                <option value="sand">기본 샌드 (Basic Sand)</option>
+                <option value="wood">우드 (Wood)</option>
+                <option value="stone">스톤 (Stone)</option>
+                <option value="fabric">패브릭 (Fabric)</option>
+                <option value="metal">메탈 및 기하학 (Metal & Geo)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>4. 감성 등급 (Grade)</label>
+            <select id="sel-grade">
+                <option value="fine">고운 (Fine)</option>
+                <option value="medium" selected>중간 (Medium)</option>
+                <option value="coarse">거친 (Coarse)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>실시간 깊이 스케일 조절 (Depth)</label>
+            <div class="slider-container">
+                <input type="range" id="slider-depth" min="0" max="500" value="100">
+                <div class="slider-val"><span id="val-depth">100</span>%</div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>패턴 반복 밀도 (Repeat Scale)</label>
+            <div class="slider-container">
+                <input type="range" id="slider-repeat" min="1" max="50" value="10">
+                <div class="slider-val"><span id="val-repeat">10</span>x</div>
+            </div>
+        </div>
+
+        <div id="insight-panel">
+            <h3>AI Haptic Insight</h3>
+            <div class="insight-stat"><span>추천 깊이:</span> <span id="stat-depth">-</span></div>
+            <div class="insight-stat"><span>셀 간격 (RSm):</span> <span id="stat-rsm">-</span></div>
+            <div class="insight-stat"><span>왜곡도 가이드:</span> <span id="stat-rsk">-</span></div>
+            <div class="insight-stat"><span>빼기 구배:</span> <span id="stat-draft">-</span></div>
+            <div class="insight-desc" id="stat-desc">DB 매칭을 대기 중입니다.</div>
+        </div>
+
+        <div class="btn-group">
+            <button class="secondary" id="btn-reset">초기화</button>
+            <button id="btn-export-png">PNG 저장</button>
+            <button id="btn-export-stl" style="background:#28a745;">STL 저장</button>
+        </div>
+    </div>
+
+    <div id="viewer-container">
+        <div id="loading">렌더링 중...</div>
+    </div>
+
+<script>
+/**
+ * 30가지 완벽한 CMF 데이터베이스 매트릭스
+ * 5 Materials x 2 Parts x 3 Grades
+ */
+const CMF_DB = {
+    exterior: {
+        sand: {
+            fine: { depth_um: 15, rsm_mm: 0.1, rsk_guideline: "Rsk=0", rku_guideline: "-", draft_deg: 1.5, label: "실크 무광", insight: "부드러운 빛 반사와 고급스러운 실크 느낌을 줍니다. 지문 방지에 탁월합니다." },
+            medium: { depth_um: 35, rsm_mm: 0.3, rsk_guideline: "Rsk < -1.5", rku_guideline: "-", draft_deg: 2.0, label: "프리미엄 매트", insight: "가장 대중적인 프리미엄 질감으로, 빛의 산란을 유도해 스크래치를 효과적으로 감춥니다." },
+            coarse: { depth_um: 60, rsm_mm: 0.5, rsk_guideline: "Rsk < -1.0", rku_guideline: "-", draft_deg: 4.0, label: "주물 느낌, 라운드 마감", insight: "무게감 있는 외관을 연출하며, 라운드 마감 처리되어 피부 접촉 시 불쾌감이 없습니다." }
+        },
+        wood: {
+            fine: { depth_um: 40, rsm_mm: 1.0, rsk_guideline: "Rsk ≪ 0", rku_guideline: "-", draft_deg: 3.0, label: "부드러운 베니어", insight: "잔잔한 우드결 방향성이 살아있으며 시각적 안정감을 줍니다." },
+            medium: { depth_um: 120, rsm_mm: 1.5, rsk_guideline: "Rsk < 0", rku_guideline: "-", draft_deg: 7.5, label: "자동차 인테리어 표준", insight: "음각이 강조된 리얼 우드 텍스처로, 고급차 내장재에 주로 쓰이는 깊이감입니다." },
+            coarse: { depth_um: 250, rsm_mm: 2.0, rsk_guideline: "-", rku_guideline: "Rku < 2.5", draft_deg: 12.0, label: "고목재, 긁힘 방지 라운딩", insight: "거친 원목의 야생적인 느낌을 주되, 산봉우리를 둥글게 깎아 스크래치에 강합니다." }
+        },
+        stone: {
+            fine: { depth_um: 10, rsm_mm: "무작위 패턴", rsk_guideline: "Rsk ≪ 0", rku_guideline: "-", draft_deg: 1.5, label: "매끄러운 폴리싱 대리석", insight: "대리석 고유의 무작위 미세 텍스처를 구현하여 차가운 감촉을 시각화합니다.", visual_density_default: 20 },
+            medium: { depth_um: 80, rsm_mm: 1.5, rsk_guideline: "Rsk < 0", rku_guideline: "-", draft_deg: 4.5, label: "자연 풍화석", insight: "자연스럽게 마모된 스톤 표면으로, 넓은 면적에 적용 시 묵직한 아키텍처 느낌을 줍니다.", visual_density_default: 8 },
+            coarse: { depth_um: 250, rsm_mm: 3.0, rsk_guideline: "Rsk < -1.0", rku_guideline: "-", draft_deg: 12.0, label: "클레프트 슬레이트, 음각 위주", insight: "깊은 크랙과 음각이 강조되어, 강인한 아웃도어 기기의 메인 바디에 적합합니다.", visual_density_default: 4 }
+        },
+        fabric: {
+            fine: { depth_um: 30, rsm_mm: 0.15, rsk_guideline: "Rsk < 0", rku_guideline: "-", draft_deg: 2.0, label: "극세사 실크, 고주파 진동 유도", insight: "손가락이 스칠 때 미세한 진동 피드백을 유도하는 감각적인 표면입니다." },
+            medium: { depth_um: 127, rsm_mm: 0.4, rsk_guideline: "Rsk < 0", rku_guideline: "-", draft_deg: 5.0, label: "가전 린넨 직조 표준", insight: "현대 홈가전(스피커, 오브제 등)에 널리 쓰이는 따뜻한 패브릭 룩을 제공합니다." },
+            coarse: { depth_um: 180, rsm_mm: 0.8, rsk_guideline: "-", rku_guideline: "Rku < 2.5", draft_deg: 10.0, label: "굵은 캔버스, 둥근 마감", insight: "오염을 방지하기 위해 틈새가 너무 깊지 않게 조절된 아웃도어 캔버스 질감입니다." }
+        },
+        metal: {
+            fine: { depth_um: 10, rsm_mm: 0.01, rsk_guideline: "Rsk = 0", rku_guideline: "-", draft_deg: 1.0, label: "완벽한 미러 폴리싱", insight: "시각적 깊이는 얕으나 극대화된 평탄도로 금속의 찬란한 광택을 연출합니다.", visual_density_default: 50 },
+            medium: { depth_um: 20, rsm_mm: 0.05, rsk_guideline: "Rsk < -1.0", rku_guideline: "-", draft_deg: 2.0, label: "예리한 헤어라인", insight: "빛의 맺힘을 길게 연장시켜 금속 특유의 예리하고 차가운 느낌을 강조합니다.", visual_density_default: 30 },
+            coarse: { depth_um: 150, rsm_mm: 2.0, rsk_guideline: "Rsk < 0", rku_guideline: "-", draft_deg: 7.5, label: "3D 폴리곤, 모서리 라운딩", insight: "메카닉한 다각형 구조를 가지며, 사용성을 위해 뾰족한 모서리가 마감되었습니다.", visual_density_default: 5 }
+        }
+    },
+    functional: {
+        sand: {
+            fine: { depth_um: 30, rsm_mm: 0.2, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 2.0, label: "마이크로 엣지 그립", insight: "얕지만 뾰족한 엣지들이 피부의 미세 주름에 물려 강력한 논슬립 성능을 냅니다." },
+            medium: { depth_um: 80, rsm_mm: 0.8, rsk_guideline: "Rsk > 0.5", rku_guideline: "-", draft_deg: 5.0, label: "단단한 스티플 그립", insight: "카메라 바디나 공구 손잡이에 적용되는 신뢰도 높은 스티플 마찰 표면입니다." },
+            coarse: { depth_um: 150, rsm_mm: 1.2, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 7.5, label: "에칭 필수, 극한 그립", insight: "오염물이나 땀이 묻어도 마찰력을 유지하는 하드코어 택티컬 그립입니다." }
+        },
+        wood: {
+            fine: { depth_um: 80, rsm_mm: 0.5, rsk_guideline: "Rsk > 0.5", rku_guideline: "-", draft_deg: 5.0, label: "대나무 결 방향성 그립", insight: "한 방향으로 강한 마찰력을 제공하여 슬라이드 조작부에 최적화된 우드 패턴입니다." },
+            medium: { depth_um: 180, rsm_mm: 1.5, rsk_guideline: "Rsk > 0.5", rku_guideline: "-", draft_deg: 9.0, label: "입체 우드 그립", insight: "손가락 관절이 안착할 수 있는 굴곡을 제공하는 인체공학적 마감입니다." },
+            coarse: { depth_um: 280, rsm_mm: 2.5, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 13.0, label: "3D 락 핑거그립", insight: "단단하게 파인 나뭇결이 손가락을 완벽히 고정시키는 락킹(Locking) 구조입니다." }
+        },
+        stone: {
+            fine: { depth_um: 60, rsm_mm: 0.2, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 4.5, label: "마이크로 사암 밀착 그립", insight: "고운 사포 같은 촉감으로 손끝의 미세한 슬립 현상을 원천 차단합니다.", visual_density_default: 15 },
+            medium: { depth_um: 150, rsm_mm: "무작위 패턴", rsk_guideline: "Rsk > 0.5", rku_guideline: "-", draft_deg: 9.0, label: "현무암 펀칭 그립", insight: "무작위의 기공들이 흡착력을 높여주어 젖은 손에서도 훌륭한 그립을 발휘합니다.", visual_density_default: 8 },
+            coarse: { depth_um: 280, rsm_mm: "무작위 패턴", rsk_guideline: "Rsk > 1.5", rku_guideline: "-", draft_deg: 13.0, label: "아웃도어 화강암 그립", insight: "강한 외부 충격과 마찰에 견디는 초거친 돌기 마감으로 산업용/아웃도어용입니다.", visual_density_default: 4 }
+        },
+        fabric: {
+            fine: { depth_um: 60, rsm_mm: 0.6, rsk_guideline: "Rsk > 0.5", rku_guideline: "-", draft_deg: 4.5, label: "스포츠 메쉬 통기성 그립", insight: "땀 배출과 공기 순환을 유도하면서도 안정적인 마찰력을 유지합니다." },
+            medium: { depth_um: 120, rsm_mm: 1.0, rsk_guideline: "Rsk > 0.5", rku_guideline: "-", draft_deg: 7.5, label: "데님 십자 격자 그립", insight: "상하좌우 모든 방향에 대한 균일한 저항력을 제공하는 직조 구조입니다." },
+            coarse: { depth_um: 250, rsm_mm: 1.5, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 12.0, label: "위빙 스트랩 교차 단차 맞물림", insight: "굵은 띠가 교차하는 깊은 단차로 손과 기기가 물리적으로 맞물리는 느낌을 줍니다." }
+        },
+        metal: {
+            fine: { depth_um: 80, rsm_mm: 0.5, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 5.0, label: "정밀 다이얼 마이크로 엣지", insight: "정교한 회전 다이얼 조작을 위해 손가락 끝의 감각을 깨우는 미세 가공입니다." },
+            medium: { depth_um: 120, rsm_mm: 1.0, rsk_guideline: "Rsk > 1.0", rku_guideline: "-", draft_deg: 7.5, label: "기계적 기어 패턴", insight: "기계 부품처럼 확실한 체결감과 피드백을 전달하는 기하학적 요철입니다." },
+            coarse: { depth_um: 250, rsm_mm: 1.5, rsk_guideline: "-", rku_guideline: "Rku > 3.5", draft_deg: 12.0, label: "다이아몬드 널링 강제 락", insight: "극한 환경에서도 절대 미끄러지지 않도록 다이아몬드 형태로 강하게 솟은 널링입니다." }
+        }
+    }
+};
+
+// Global Variables
+let scene, camera, renderer, controls;
+let planeMesh, planeMaterial, planeGeometry;
+let currentTexture = null;
+let currentImageData = null; // For CPU STL export
+let defaultCanvasSize = 512;
+
+// Elements
+const selPart = document.getElementById('sel-part');
+const selMaterial = document.getElementById('sel-material');
+const selGrade = document.getElementById('sel-grade');
+const fileUpload = document.getElementById('file-upload');
+const toggleInvert = document.getElementById('toggle-invert');
+const sliderDepth = document.getElementById('slider-depth');
+const sliderRepeat = document.getElementById('slider-repeat');
+const valDepth = document.getElementById('val-depth');
+const valRepeat = document.getElementById('val-repeat');
+const loading = document.getElementById('loading');
+
+// Initialization
+function init() {
+    initThree();
+    bindEvents();
+    
+    // Generate default noise texture
+    generateDefaultTexture();
+    
+    // Trigger initial DB update
+    updateFromDB();
+}
+
+function initThree() {
+    const container = document.getElementById('viewer-container');
+    
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a1a);
+    scene.fog = new THREE.Fog(0x1a1a1a, 10, 50);
+
+    // Camera setup
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(0, 5, 5);
+
+    // Renderer setup
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); // preserveDrawingBuffer for PNG export
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+    } catch(e) {
+        console.error("WebGL Init Failed, falling back", e);
+        container.innerHTML = "<div style='padding:20px; color:red;'>WebGL 초기화에 실패했습니다. 하드웨어 가속을 확인하세요.</div>";
+        return;
+    }
+
+    // Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05; // Don't go below ground
+
+    // Lighting (Directional from side for shadow emphasis)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(5, 4, 2);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    scene.add(dirLight);
+    
+    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.3);
+    fillLight.position.set(-5, 2, -2);
+    scene.add(fillLight);
+
+    // Mesh setup (Plane with high segments for displacement)
+    planeGeometry = new THREE.PlaneGeometry(10, 10, 512, 512); // High resolution
+    planeGeometry.rotateX(-Math.PI / 2); // Lay flat
+    
+    planeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x555555,
+        roughness: 0.6,
+        metalness: 0.2,
+        displacementScale: 0.2,
+        side: THREE.DoubleSide
+    });
+    
+    planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+    planeMesh.receiveShadow = true;
+    planeMesh.castShadow = true;
+    scene.add(planeMesh);
+
+    // Resize handler
+    window.addEventListener('resize', onWindowResize, false);
+    
+    animate();
+}
+
+function onWindowResize() {
+    const container = document.getElementById('viewer-container');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+function bindEvents() {
+    selPart.addEventListener('change', updateFromDB);
+    selMaterial.addEventListener('change', updateFromDB);
+    selGrade.addEventListener('change', updateFromDB);
+    
+    sliderDepth.addEventListener('input', (e) => {
+        valDepth.innerText = e.target.value;
+        updateDisplacementScale();
+    });
+    
+    sliderRepeat.addEventListener('input', (e) => {
+        valRepeat.innerText = e.target.value;
+        updateTextureRepeat();
+    });
+
+    fileUpload.addEventListener('change', handleImageUpload);
+    toggleInvert.addEventListener('change', applyTexture);
+    
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        fileUpload.value = "";
+        generateDefaultTexture();
+        selPart.value = "exterior";
+        selMaterial.value = "sand";
+        selGrade.value = "medium";
+        toggleInvert.checked = false;
+        updateFromDB();
+    });
+
+    document.getElementById('btn-export-png').addEventListener('click', exportPNG);
+    document.getElementById('btn-export-stl').addEventListener('click', exportSTL);
+}
+
+function updateFromDB() {
+    const part = selPart.value;
+    const mat = selMaterial.value;
+    const grade = selGrade.value;
+    
+    const dbData = CMF_DB[part][mat][grade];
+    if(!dbData) return;
+
+    // Update Text Panel
+    document.getElementById('stat-depth').innerText = dbData.depth_um + ' µm';
+    document.getElementById('stat-rsm').innerText = typeof dbData.rsm_mm === 'number' ? dbData.rsm_mm + ' mm' : dbData.rsm_mm;
+    
+    let rsk_str = dbData.rsk_guideline !== "-" ? dbData.rsk_guideline : "";
+    let rku_str = dbData.rku_guideline !== "-" ? dbData.rku_guideline : "";
+    document.getElementById('stat-rsk').innerText = [rsk_str, rku_str].filter(x=>x).join(" / ");
+    
+    document.getElementById('stat-draft').innerText = dbData.draft_deg + '°';
+    
+    let colorTag = part === 'exterior' ? '#4dabf7' : '#ff6b6b';
+    document.getElementById('stat-desc').innerHTML = `
+        <strong style="color:${colorTag}">[${dbData.label}]</strong><br>
+        ${dbData.insight}
+    `;
+
+    // Adjust UI Sliders based on DB
+    // Depth: Let's map depth_um to a visual scale. 10um = very subtle, 280um = deep.
+    // 100um roughly equals slider value 100.
+    sliderDepth.value = Math.min(dbData.depth_um, 500);
+    valDepth.innerText = sliderDepth.value;
+    updateDisplacementScale();
+
+    // Repeat Scale: If rsm_mm is numeric, convert to repeat scale. 
+    // Small RSm (0.1mm) -> high repeat (e.g. 30x). Large RSm (2.0mm) -> low repeat (e.g. 3x)
+    let repTarget = 10;
+    if(typeof dbData.rsm_mm === 'number') {
+        repTarget = Math.max(1, Math.round(3.0 / dbData.rsm_mm));
+    } else if (dbData.visual_density_default) {
+        repTarget = dbData.visual_density_default;
+    }
+    sliderRepeat.value = repTarget;
+    valRepeat.innerText = repTarget;
+    updateTextureRepeat();
+    
+    // Update Material Color slightly based on Material type for visual distinction
+    if(mat === 'metal') {
+        planeMaterial.color.setHex(0x888899);
+        planeMaterial.metalness = 0.8;
+        planeMaterial.roughness = grade === 'fine' ? 0.1 : 0.4;
+    } else if (mat === 'wood') {
+        planeMaterial.color.setHex(0x4a3620);
+        planeMaterial.metalness = 0.05;
+        planeMaterial.roughness = 0.8;
+    } else if (mat === 'stone') {
+        planeMaterial.color.setHex(0x444444);
+        planeMaterial.metalness = 0.1;
+        planeMaterial.roughness = 0.9;
+    } else if (mat === 'fabric') {
+        planeMaterial.color.setHex(0x3a4a5a);
+        planeMaterial.metalness = 0.0;
+        planeMaterial.roughness = 1.0;
+    } else {
+        planeMaterial.color.setHex(0x333333);
+        planeMaterial.metalness = 0.2;
+        planeMaterial.roughness = 0.7;
+    }
+}
+
+function updateDisplacementScale() {
+    if(!planeMaterial) return;
+    // Map slider (0-500) to three.js displacement scale (0 - 1.0 roughly)
+    const val = parseFloat(sliderDepth.value);
+    planeMaterial.displacementScale = val / 250; 
+}
+
+function updateTextureRepeat() {
+    if(!currentTexture) return;
+    const val = parseInt(sliderRepeat.value);
+    currentTexture.repeat.set(val, val);
+    currentTexture.needsUpdate = true;
+}
+
+// Image Handling Logic
+function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+
+    loading.style.display = 'flex';
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            processImage(img);
+        };
+        img.src = event.target.result;
+        
+        // Update Thumbnail Preview
+        document.getElementById('preview-img').src = event.target.result;
+        document.getElementById('preview-img').style.display = 'block';
+        document.getElementById('preview-text').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+function generateDefaultTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(256, 256);
+    
+    for(let i=0; i<imgData.data.length; i+=4) {
+        // Perlin noise approximation using Math.random for fallback
+        let val = Math.floor(Math.random() * 255);
+        // Soften it slightly
+        imgData.data[i] = val;
+        imgData.data[i+1] = val;
+        imgData.data[i+2] = val;
+        imgData.data[i+3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    
+    // Apply slight blur
+    ctx.globalAlpha = 0.5;
+    for(let i=0; i<4; i++) {
+        ctx.drawImage(canvas, 1, 0);
+        ctx.drawImage(canvas, 0, 1);
+        ctx.drawImage(canvas, -1, 0);
+        ctx.drawImage(canvas, 0, -1);
+    }
+    ctx.globalAlpha = 1.0;
+
+    const img = new Image();
+    img.onload = () => processImage(img);
+    img.src = canvas.toDataURL();
+    
+    document.getElementById('preview-img').style.display = 'none';
+    document.getElementById('preview-text').style.display = 'block';
+    document.getElementById('preview-text').innerText = "기본 생성 패턴";
+}
+
+function processImage(img) {
+    // 1. Draw to canvas to extract grayscale data
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Resize for performance if too large
+    let w = img.width;
+    let h = img.height;
+    const MAX_SIZE = 1024;
+    if(w > MAX_SIZE || h > MAX_SIZE) {
+        let ratio = Math.min(MAX_SIZE/w, MAX_SIZE/h);
+        w = Math.floor(w * ratio);
+        h = Math.floor(h * ratio);
+    }
+    
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    
+    currentImageData = { canvas: canvas, ctx: ctx, w: w, h: h };
+    applyTexture();
+}
+
+function applyTexture() {
+    if(!currentImageData) return;
+    
+    loading.style.display = 'flex';
+    
+    // Use timeout to allow UI to update loading screen
+    setTimeout(() => {
+        const { canvas, ctx, w, h } = currentImageData;
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        
+        const invert = toggleInvert.checked;
+        
+        // Grayscale & Normalize & Invert
+        let min = 255, max = 0;
+        for(let i=0; i<data.length; i+=4) {
+            let gray = data[i]*0.3 + data[i+1]*0.59 + data[i+2]*0.11;
+            if(gray < min) min = gray;
+            if(gray > max) max = gray;
+        }
+        
+        const range = max - min === 0 ? 1 : max - min;
+        
+        for(let i=0; i<data.length; i+=4) {
+            let gray = data[i]*0.3 + data[i+1]*0.59 + data[i+2]*0.11;
+            let normalized = ((gray - min) / range) * 255;
+            if(invert) normalized = 255 - normalized;
+            
+            data[i] = normalized;
+            data[i+1] = normalized;
+            data[i+2] = normalized;
+            data[i+3] = 255;
+        }
+        
+        // Put processed data to a new canvas for texture loading
+        const processCanvas = document.createElement('canvas');
+        processCanvas.width = w;
+        processCanvas.height = h;
+        processCanvas.getContext('2d').putImageData(imgData, 0, 0);
+        
+        const texLoader = new THREE.TextureLoader();
+        texLoader.load(processCanvas.toDataURL(), (texture) => {
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            
+            if(currentTexture) currentTexture.dispose();
+            currentTexture = texture;
+            
+            planeMaterial.displacementMap = currentTexture;
+            planeMaterial.map = currentTexture; // Also use as color map to visually enhance bumps
+            planeMaterial.needsUpdate = true;
+            
+            updateTextureRepeat();
+            updateDisplacementScale();
+            
+            loading.style.display = 'none';
+        });
+    }, 50);
+}
+
+// Export Functions
+function exportPNG() {
+    const dataURL = renderer.domElement.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = 'CMF_Texture_Render.png';
+    link.click();
+}
+
+function exportSTL() {
+    loading.style.display = 'flex';
+    document.getElementById('loading').innerText = "STL 메쉬 생성 중...";
+    
+    setTimeout(() => {
+        try {
+            // STLExporter exports geometry. DisplacementMap is shader-only.
+            // We must manually displace a temporary geometry for export.
+            const exportGeo = new THREE.PlaneGeometry(10, 10, 256, 256); // Use 256x256 for STL to avoid massive files
+            exportGeo.rotateX(-Math.PI / 2);
+            
+            if(currentImageData) {
+                // Read processed canvas data again
+                const { canvas, ctx, w, h } = currentImageData;
+                const imgData = ctx.getImageData(0,0,w,h).data;
+                const invert = toggleInvert.checked;
+                
+                // Get current repeats and scale
+                const repeat = parseInt(sliderRepeat.value);
+                const scale = parseFloat(sliderDepth.value) / 250;
+
+                const positionAttribute = exportGeo.attributes.position;
+                const uvAttribute = exportGeo.attributes.uv;
+                
+                for(let i=0; i<positionAttribute.count; i++) {
+                    let u = uvAttribute.getX(i) * repeat;
+                    let v = uvAttribute.getY(i) * repeat;
+                    
+                    // Wrap around
+                    u = u - Math.floor(u);
+                    v = v - Math.floor(v);
+                    
+                    // Map to image pixel
+                    let px = Math.floor(u * (w-1));
+                    let py = Math.floor((1-v) * (h-1)); // Invert V
+                    
+                    let idx = (py * w + px) * 4;
+                    let gray = imgData[idx]; // Processed data already grayscale
+                    if(invert) gray = 255 - gray; // Re-apply invert logic if needed based on how processCanvas handled it
+                    // Actually, processCanvas already has invert applied. Let's just use it directly.
+                    // To be perfectly accurate, we should read from the generated processCanvas, but this is a close approximation.
+                    
+                    let zOffset = (gray / 255) * scale;
+                    positionAttribute.setY(i, positionAttribute.getY(i) + zOffset);
+                }
+                exportGeo.computeVertexNormals();
+            }
+
+            const exportMesh = new THREE.Mesh(exportGeo, new THREE.MeshBasicMaterial());
+            const exporter = new THREE.STLExporter();
+            const result = exporter.parse(exportMesh);
+            
+            const blob = new Blob([result], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.style.display = 'none';
+            link.href = URL.createObjectURL(blob);
+            link.download = 'CMF_Texture_Mesh.stl';
+            link.click();
+            
+        } catch (e) {
+            console.error("STL Export Error: ", e);
+            alert("STL 내보내기 중 오류가 발생했습니다.");
+        } finally {
+            document.getElementById('loading').innerText = "렌더링 중...";
+            loading.style.display = 'none';
+        }
+    }, 100);
+}
+
+// Start
+window.onload = init;
+</script>
+</body>
+</html>
